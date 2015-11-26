@@ -31,8 +31,8 @@ featureSelection=function(para,group,method="rf",valueID="value",fold=5,
 }
 
 
-
-rfSelection=function(x,y,method,sizes=NULL,fold=5,repeats=10,verbose=FALSE,...){
+## metric="ROC"
+rfSelection=function(x,y,method,metric="Accuracy",sizes=NULL,fold=5,repeats=10,verbose=FALSE,...){
     
     if(nrow(x)!=length(y)){
         stop("The number of row of x must be equal to the length of y!")
@@ -43,6 +43,7 @@ rfSelection=function(x,y,method,sizes=NULL,fold=5,repeats=10,verbose=FALSE,...){
         y <- as.factor(as.character(y))
     }
     
+    ## a numeric vector of integers corresponding to the number of features that should be retained
     if(is.null(sizes)){
         sizes <- seq(1,nrow(x),by=1)
     }
@@ -52,13 +53,13 @@ rfSelection=function(x,y,method,sizes=NULL,fold=5,repeats=10,verbose=FALSE,...){
                               classProbs = TRUE,
                               verboseIter=verbose,
                               summaryFunction = twoClassSummary)
-    rfectrl <- rfeControl(functions=rfFuncs, 
+    rfectrl <- rfeControl(functions=caret::rfFuncs, 
                           method = "cv",
                           repeats = repeats,
                           number = fold,
                           returnResamp="final", verbose = verbose)
     rferes <- rfe(x, y, sizes = sizes, 
-                  metric = "Accuracy", 
+                  metric = metric, 
                   maximize = TRUE, 
                   tuneLength=10,
                   rfeControl = rfectrl, 

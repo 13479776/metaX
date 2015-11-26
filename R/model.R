@@ -45,13 +45,12 @@ setMethod("calcVIP", signature(), function(x,ncomp,...){
 ##' @param auc A logical indicates whether calculate the AUC
 ##' @param sample Sample class
 ##' @param valueID The name of column used
-##' @param cpu The number of cpu used
 ##' @param label The label used for plot
 ##' @param ... additional arguments
 ##' @return pvalue
 ##' @export
 runPLSDA=function(para,plsdaPara,auc=TRUE,sample=NULL,valueID="valueNorm",
-                  cpu=0,label="order",...){
+                  label="order",...){
     
     ptm <- proc.time()
     
@@ -63,6 +62,7 @@ runPLSDA=function(para,plsdaPara,auc=TRUE,sample=NULL,valueID="valueNorm",
     center <- plsdaPara@center
     validation <- plsdaPara@validation
     k <- plsdaPara@kfold
+    cpu <- plsdaPara@cpu
     
     
     outdir <- para@outdir
@@ -152,7 +152,6 @@ runPLSDA=function(para,plsdaPara,auc=TRUE,sample=NULL,valueID="valueNorm",
     result$method <- method
     
     dat <- 1:n
-    
     if(cpu==0){
         cpu <- detectCores()
     }
@@ -175,8 +174,18 @@ runPLSDA=function(para,plsdaPara,auc=TRUE,sample=NULL,valueID="valueNorm",
     result$pvalue$R2 <- sum(result$plsda$perm['R2',] > result$plsda$res$R2)/n
     result$pvalue$Q2 <- sum(result$plsda$perm['Q2',] > result$plsda$res$Q2)/n
     
+    message("P-value R2Y: ",result$pvalue$R2)
+    message("P-value Q2Y: ",result$pvalue$Q2)
+    
+    message("R2Y: ",result$plsda$res$R2)
+    message("Q2Y: ",result$plsda$res$Q2)
+    
     
     ###########################################################################
+    
+    plotLoading(result$model,fig=paste(outdir,"/",prefix,"-",paste(sample,collapse = "_"),
+                                       "-PLSDA-loading.png",sep=""))
+    
     fig <- paste(outdir,"/",prefix,"-",paste(sample,collapse = "_"),
                  "-PLSDA.pdf",sep="")
     pdf(fig,width = 6,height = 6)
@@ -200,8 +209,8 @@ runPLSDA=function(para,plsdaPara,auc=TRUE,sample=NULL,valueID="valueNorm",
     sampleList$class <- NULL
     plotData <- merge(plotData,sampleList,by="sample",sort=FALSE)
     ggobj <-ggplot(data = plotData,aes(x=x,y=y,colour=class))+
-        geom_hline(aes(x=0),colour="white",size=1)+
-        geom_vline(aes(x=0),colour="white",size=1)+
+        geom_hline(yintercept=0,colour="white",size=1)+
+        geom_vline(xintercept=0,colour="white",size=1)+
         geom_point()+
 
         xlab(paste("PC1"," (",sprintf("%.2f%%",explvar(result$model)[1]),") ",
@@ -240,7 +249,7 @@ runPLSDA=function(para,plsdaPara,auc=TRUE,sample=NULL,valueID="valueNorm",
                     ylab = paste("PC2"," (",
                         sprintf("%.2f%%",explvar(result$model)[2]),") ",sep=""),
                     zlab = paste("PC3"," (",
-                        sprintf("%.2f%%",explvar(result$model)[3]),") ",sep=""),
+                        sprintf("%.2f%%",explvar(result$model)[3]),") ",sep="")
         )#color = as.numeric(as.factor(plotData$class)))
         s3d$points(plotData$x,plotData$y,plotData$z, pch = 1,col = col)
         s3d.coords <- s3d$xyz.convert(plotData$x,plotData$y,plotData$z)

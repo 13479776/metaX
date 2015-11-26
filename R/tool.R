@@ -163,7 +163,7 @@ countMissingValue = function(x,ratio,omit.negative=TRUE){
 ##' @param out.rmqc Boolean, setting the argument to TRUE to remove the QC 
 ##' samples for the csv file.
 ##' @param saveRds Boolean, setting the argument to TRUE to save some objects to
-##' disk for debug. Only useful for developer. Default is FALSE.
+##' disk for debug. Only useful for developer. Default is TRUE.
 ##' @param ... Other argument
 ##' @return A metaXpara object.
 ##' @exportMethod
@@ -200,19 +200,26 @@ countMissingValue = function(x,ratio,omit.negative=TRUE){
 setGeneric("metaXpipe",function(para,plsdaPara,cvFilter = 0.3,remveOutlier=TRUE,
                               outTol=1.2,doQA=TRUE,doROC=TRUE,qcsc=FALSE,nor.method="pqn",
                               pclean=TRUE,t=1,scale="uv",idres=NULL,
-                              nor.order=1,out.rmqc=FALSE,saveRds=FALSE,...) 
+                              nor.order=1,out.rmqc=FALSE,saveRds=TRUE,...) 
     standardGeneric("metaXpipe"))
 ##' @describeIn metaXpipe
 setMethod("metaXpipe", signature(para = "metaXpara"),
           function(para,plsdaPara,cvFilter = 0.3,remveOutlier=TRUE,outTol=1.2,
                    doQA=TRUE,doROC=TRUE,qcsc=FALSE,nor.method="pqn",
                    pclean=TRUE,t=1,scale="uv",idres=NULL,nor.order=1,
-                   out.rmqc=FALSE,saveRds=FALSE,...){
+                   out.rmqc=FALSE,saveRds=TRUE,...){
     
+    checkSampleList(para@sampleListFile)
+              
     if(is.null(para@ratioPairs)){
         stop("Please set the value of ratioPairs!")
     }
     
+    ## note
+    plsdaPara@scale <- scale
+    plsdaPara@t <- t
+    
+              
     ## directory structure, data (all figures and other files), report.html
     raw_outdir <- para@outdir
     ## all figures and other files
@@ -338,6 +345,8 @@ setMethod("metaXpipe", signature(para = "metaXpara"),
                                    fileHighRes = fig2))
         
         
+                    
+        
         if(hasQC(para)){
             message("plot correlation heatmap...")
             fig <- plotCorHeatmap(para = para,valueID = "value",anno = TRUE,
@@ -356,6 +365,16 @@ setMethod("metaXpipe", signature(para = "metaXpara"),
         s3_sub1 <- addTo(s3_sub1,
                          newFigure(fig1,"TIC distribution.",
                                    fileHighRes = fig2))
+        
+        ticTable <- para@peaksData %>% group_by(sample,batch,class) %>% 
+            dplyr::summarise(tic=sum(value)) %>% 
+            group_by(batch) %>% 
+            dplyr::summarise(n00=quantile(tic)[1],
+                      n25=quantile(tic)[2],
+                      n50=quantile(tic)[3],
+                      n75=quantile(tic)[4],
+                      n100=quantile(tic)[5])
+        print(ticTable)
 
     }
     
@@ -373,6 +392,10 @@ setMethod("metaXpipe", signature(para = "metaXpara"),
         pr <- metaX::preProcess(pr,scale = scale,center = TRUE,
                                 valueID = "value")
         ## 
+        if(saveRds){
+            saveRDS(para,file = paste(para@outdir,"/",para@prefix,"-para_before_removeOutlier.rds",
+                                      sep=""))
+        }
         removeSampleNames <- autoRemoveOutlier(pr,outTol=outTol,scale="none",
                                                center=FALSE,valueID = "value")
         para <- removeSample(para,rsamples = removeSampleNames)
@@ -464,6 +487,13 @@ setMethod("metaXpipe", signature(para = "metaXpara"),
                              newFigure(fig1,"Peak intensity distribution.",
                                        fileHighRes = fig2))
             
+            message("plot TIC distribution...")
+            fig <- plotPeakSumDist(para,valueID = "valueNorm")
+            fig1 <- paste("data/",basename(fig$fig),sep="")
+            fig2 <- paste("data/",basename(fig$highfig),sep="")
+            s3_sub1 <- addTo(s3_sub1,
+                             newFigure(fig1,"TIC distribution.",
+                                       fileHighRes = fig2))
             
             fig <- plotHeatMap(pp,valueID="valueNorm",log=TRUE,rmQC=FALSE,
                                scale="row",
@@ -498,6 +528,14 @@ setMethod("metaXpipe", signature(para = "metaXpara"),
                                fileHighRes = fig2))
     s3 <- addTo(s3,s3_sub1)
     
+    ## remove QC
+    ppca@prefix <- paste(ppca@prefix,"-noqc",sep="")
+    fig <- metaX::plotPCA(ppca,valueID = "valueNorm",scale = "none",batch = TRUE,
+                          rmQC = TRUE)
+    ## no QC, no batch
+    ppca@prefix <- paste(ppca@prefix,"-nobatch",sep="")
+    fig <- metaX::plotPCA(ppca,valueID = "valueNorm",scale = "none",batch = FALSE,
+                          rmQC = TRUE)
     #plotPLSDA(para)
     para <- peakStat(para = para,plsdaPara = plsdaPara,doROC=doROC)
     
@@ -528,6 +566,11 @@ setMethod("metaXpipe", signature(para = "metaXpara"),
     report<-addTo(report,s1,s2,s3)
     message("Write report to file:",paste(raw_outdir,"/report",sep=""))
     writeReport(report, filename = paste(raw_outdir,"/report",sep=""))
+    
+    
+    message("Print information about the current R session:")
+    writeLines(capture.output(sessionInfo()), 
+               paste(para@outdir,"/",para@prefix,"-sessionInfo.txt",sep=""))
     
     return(para)         
              
@@ -610,7 +653,11 @@ setGeneric("removeSample",function(para,rsamples,...)
 ##' @describeIn removeSample
 setMethod("removeSample", signature(para = "metaXpara"),
           function(para,rsamples,...){
-    para@peaksData <- dplyr::filter(para@peaksData,!sample %in% rsamples)
+    if(is.null(para@peaksData)){
+        para@rawPeaks <- para@rawPeaks[,! c(names(para@rawPeaks) %in% rsamples)]
+    }else{
+        para@peaksData <- dplyr::filter(para@peaksData,!sample %in% rsamples)
+    }
     return(para)
 })
 
@@ -769,7 +816,7 @@ setGeneric("plotPeakSumDist",function(para,valueID="value",width=6,height=4,...)
     standardGeneric("plotPeakSumDist"))
 ##' @describeIn plotPeakSumDist
 setMethod("plotPeakSumDist", signature(para = "metaXpara"),
-          function(para,valueID="value",width=6,height=4,...){
+          function(para,valueID="value",width=8,height=5,...){
     
     dat <- ddply(para@peaksData,.(sample,batch,class,order),here(summarise),
                    sum=sum(get(valueID)))
@@ -788,8 +835,12 @@ setMethod("plotPeakSumDist", signature(para = "metaXpara"),
     highfig <- sub(pattern = "png$",replacement = "pdf",x = fig)
     pdf(file = highfig,width = width,height = height)
     
+    write.table(dat,file=paste(para@outdir,"/",para@prefix,"-peakSumDist.txt",sep=""),
+                quote = FALSE,sep="\t",row.names = FALSE,col.names = TRUE)
+    
     ggobj <- ggplot(data=dat,aes(x=order,y=sum,colour=class,shape=batch))+
         geom_point()+
+        scale_shape_manual(values=1:n_distinct(dat$batch))+
         geom_text(aes(label=ifelse(outlier,order,"")),hjust=-0.2,size=4)+
         ylab("Total peak intensity")
     
@@ -880,6 +931,7 @@ setMethod("dataClean", signature(para = "metaXpara"),
         ggobj <- ggplot(pdat,aes(x=order,y=val,
                                  colour=class,shape=batch))+
             geom_point()+
+            scale_shape_manual(values=1:n_distinct(pdat$batch))+
             ylab(valueID)+
             ggtitle(label = gtitle)
         print(ggobj)    
@@ -892,4 +944,151 @@ setMethod("dataClean", signature(para = "metaXpara"),
 })
 
 
+
+
+checkQCPlot=function(f1,f2=NULL,fig="test.png",group=NULL){
+    
+    
+    a <- read.delim(f1,stringsAsFactors = FALSE)
+    if(is.null(group)){
+        print(unique(a$sample))
+        stop("Please set the group value!")
+    }
+    a <- a %>% filter(sample==group)
+    
+    a$rt <- sapply(a$ID,function(x){as.numeric(strsplit(x,split = "_")[[1]][1])})
+    a$mz <- sapply(a$ID,function(x){
+        x=gsub(pattern = "m/z",replacement = "",x=x)
+        x=gsub(pattern = "n",replacement = "",x=x)
+        as.numeric(strsplit(x,split = "_")[[1]][2])})
+    
+    nbar = 60
+    xmin = min(a$rt)
+    xmax = max(a$rt)
+    xmean = (xmin+xmax)/2.0
+    
+    png(filename = fig,width = 1000,height = 800,res = 120)
+    if(!is.null(f2)){
+        par(mfrow=c(5,1),mgp=c(1.6,0.6,0))
+    }else{
+        par(mfrow=c(4,1),mgp=c(1.6,0.6,0))
+    }
+    
+    
+    par(mar=c(0,4,0.2,0.5))
+    plot(a$rt,a$VIP,type="h",col="gray",xlim=c(xmin,xmax),xaxt="n",xlab="",ylab="VIP")
+    text(xmean,0.7*(par("usr")[4]-par("usr")[3]),labels = "VIP vs RT")
+    
+    d1 <- a %>% filter(abs(log2(ratio))>=log2(1.2),t.test_p.value <= 0.05) 
+    
+    if(nrow(d1)>=1){
+        points(d1$rt,d1$VIP,col="red",cex=0.6)
+    }
+    
+    if(!is.null(f2)){
+        idres <- read.delim(f2,stringsAsFactors = FALSE)
+        idres <- idres %>% filter(!is.na(Compound.ID))
+        d2 <- d1 %>% filter(ID %in% idres$ID)
+        if(nrow(d2)>=1){
+            points(d2$rt,d2$VIP,col="blue",cex=0.6)
+        }
+        
+        ## identification
+        par(mar=c(0,4,0,0.5))
+        d3 <- a %>% filter(ID %in% idres$ID)
+        plot(a$rt,a$mz,type="p",col="gray",xlim=c(xmin,xmax),xaxt="n",xlab="",cex=0.6,ylab="m/z")
+        text(xmean,0.7*(par("usr")[4]-par("usr")[3]),labels = "MZ vs RT")
+        points(d3$rt,d3$mz,cex=0.6,col="blue")
+    }
+    
+    plot(a$rt,a$mz,type="p",col="gray",xlim=c(xmin,xmax),xaxt="n",xlab="",cex=0.6,ylab="m/z")
+    text(xmean,0.7*(par("usr")[4]-par("usr")[3]),labels = "MZ vs RT(red=DEB)")
+    if(nrow(d1)>=1){
+        points(d1$rt,d1$mz,col="red",cex=0.6)
+    }
+    
+    
+    ### barplot
+    if(nrow(d1)>=1){
+        par(mar=c(0,4,0,0.5))
+        d1$rt %>% hist(nclass=nbar,xlim=c(xmin,xmax),main="",xaxt="n",xlab="")
+        text(xmean,0.7*(par("usr")[4]-par("usr")[3]),labels = "DEB distribution")
+        box()
+    }
+    
+    
+    par(mar=c(3,4,0,0.5))
+    a$rt %>% hist(nclass=nbar,xlim=c(xmin,xmax),main="",xlab="rt")
+    text(xmean,0.7*(par("usr")[4]-par("usr")[3]),labels = "All features distribution")
+    box()
+    dev.off()
+    
+}
+
+
+checkPvaluePlot=function(file=NULL,group=NULL,fig="pvalue.png"){
+    a <- read.delim(file,stringsAsFactors = FALSE)
+    a <- a %>% filter(sample==group)
+    png(filename = fig,width = 600,height = 600,res = 120)
+    par(mfrow=c(4,1),mgp=c(1.6,0.6,0))
+    
+    a <- a %>% select(ID,t.test_p.value,wilcox.test_p.value,t.test_p.value_BHcorrect,wilcox.test_p.value_BHcorrect)
+    a <- a %>% gather(class,pvalue,-ID) %>% 
+        mutate(class=gsub(pattern="_p.value",replacement="",x=class)) %>%
+        mutate(class=gsub(pattern="correct",replacement="",x=class))
+    gg <- ggplot(data=a,aes(x=pvalue))+
+            geom_histogram(colour="blue",fill="white")+
+            facet_grid(class~.,scales="free_y")+
+            theme_bw()
+    print(gg)
+    dev.off()
+    
+}
+
+checkSampleList=function(file=NULL){
+    a <- read.delim(file,stringsAsFactors = FALSE)
+    
+    ## check sample name
+    sort_sample <- sort(a$sample)
+    ns1 = length(sort_sample)
+    ns2 = length(unique(sort_sample))
+    stop_flag = FALSE
+    
+    message("Check sample ...")
+    if(ns1!=ns2){
+        message("\tFind duplicate sample(s) in your sample list:")
+        print(sort_sample[duplicated(sort_sample)])
+        stop_flag = TRUE
+    }
+    
+    ## check order duplicate
+    sort_order <- sort(a$order)
+    no1 = length(sort_order)
+    no2 = length(unique(sort_order))
+    
+    message("Check order ...")
+    if(no1!=no2){
+        message("\tFind duplicate order(s) in your sample list:")
+        print(sort_order[duplicated(sort_order)])
+        stop_flag = TRUE
+    }
+    
+   
+    
+    ## check file name
+    message("Check file name of sample list ...")
+    file_name = c("sample","batch","class","order")
+    ni = sum(file_name %in% names(a))
+    if(ni!=4){
+        message("\tPlease provide valid file name:")
+        print(file_name)
+        stop_flag = TRUE
+    }
+    
+    if(stop_flag){
+        stop("Please check your sample list. It's not valid format!")
+        
+    }
+    
+}
 

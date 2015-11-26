@@ -10,9 +10,10 @@ importFrom(ggplot2, aes, aes_string, element_text, facet_grid,element_blank,
            scale_y_continuous, theme, theme_bw,xlab,ylab,ggtitle,geom_path,
            scale_fill_discrete,scale_fill_gradient,annotate,geom_smooth,
            xlim,scale_colour_manual,stat_function,scale_x_discrete,
-           scale_y_log10,
+           scale_y_log10,geom_density2d,scale_shape_manual,
            coord_cartesian,scale_shape_discrete,geom_jitter,position_jitter,
            geom_density,coord_flip,labs,expand_limits,geom_boxplot)
+importFrom(scales,log2_trans,trans_format,trans_breaks,math_format)
 importFrom(reshape2, melt, dcast)
 importFrom(plyr, ddply, dlply, here, summarise, .)
 importFrom(pcaMethods,pca,completeObs,plotPcs,prep)
@@ -37,17 +38,17 @@ importFrom(pheatmap,pheatmap)
 importFrom(bootstrap,crossval)
 importFrom(pROC,roc,ci.auc,auc)
 importFrom(caret,train,trainControl,confusionMatrix,predict.train,
-           twoClassSummary,
+           twoClassSummary,rfeControl,rfe,
            createDataPartition)
-importFrom(dplyr,filter,rename,distinct,select,left_join,bind_rows,"%>%")
-importFrom(stringr,str_replace,str_detect)
+importFrom(dplyr,filter,rename,mutate,distinct,select,left_join,bind_rows,"%>%",group_by,n_distinct)
+importFrom(stringr,str_replace,str_detect,str_split)
 importFrom(RColorBrewer,brewer.pal)
 importFrom(DiffCorr,comp.2.cc.fdr,generate_g)
 importFrom(SSPA,pilotData,sampleSize,predictpower)
 importFrom(RCurl,debugGatherer,getCurlHandle,postForm,getURL)
 importFrom(lattice,levelplot)
 importFrom(data.table,rbindlist)
-
+importFrom(tidyr,gather)
 
 
 export(makeDirectory)
@@ -96,7 +97,13 @@ export(plotPeakBox)
 export(plotPeakSumDist)
 export(removeSample)
 export(createModels)
-
+export(importDataFromQI)
+export(importDataFromXCMS)
+export(importDataFromMetaboAnalyst)
+export(checkQCPlot)
+export(checkPvaluePlot)
+export(plotLoading)
+export(runPLSDA)
 export("dir.case<-")
 export("dir.ctrl<-")
 export("sampleListFile<-")

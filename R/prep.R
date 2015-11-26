@@ -65,7 +65,7 @@ glog=function (x, a = 1, inverse = FALSE) {
 ##' @title Data transformation
 ##' @description Data transformation
 ##' @param para An metaX object
-##' @param method The method for transformation, 1=log, 2=Cube root
+##' @param method The method for transformation, 0=none, 1=log, 2=Cube root
 ##' @param valueID The name of column used for transformation
 ##' @param ... Additional parameter
 ##' @return An new metaX object
@@ -90,6 +90,8 @@ transformation=function(para,method=1,valueID="valueNorm",...){
         x[is.na(x) | x <=0] <- min.val
         norm.data <- abs(x)^(1/3)
         para@peaksData[,valueID] <- norm.data
+    }else if(method==0){
+        ## don't transformate
     }else{
         message("Please provide valid method!")
     }

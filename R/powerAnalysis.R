@@ -8,6 +8,7 @@
 ##' @param log A logical indicating whether transform the data with log2
 ##' @param maxInd max sample number
 ##' @param fdr The FDR threshold
+##' @param showPlot Whether or not to print the figure to screen
 ##' @return An value
 ##' @author Bo Wen \email{wenbo@@genomics.cn}
 ##' @export
@@ -27,7 +28,7 @@
 ##' para <- preProcess(para,scale = "pareto",valueID="value")
 ##' powerAnalyst(para,group=c("case","control"),log=FALSE,maxInd=200)
 ##' }
-powerAnalyst=function(para,group,valueID="value",log=TRUE,maxInd=1000,fdr=0.1){
+powerAnalyst=function(para,group,valueID="value",log=TRUE,maxInd=1000,fdr=0.1,showPlot=FALSE){
     
     if(length(group)!=2){
         stop("Only valid for two class group!\n")
@@ -101,9 +102,13 @@ powerAnalyst=function(para,group,valueID="value",log=TRUE,maxInd=1000,fdr=0.1){
         geom_hline(yintercept=0.8,colour="gray")+
         geom_vline(xintercept=((n1+n2)/2),colour="red")+
         theme_bw()
+    
     print(ggobj)
     
     dev.off()
     message(fig)
+    if(showPlot){
+        print(ggobj)
+    }
     return(expPWR)
 }

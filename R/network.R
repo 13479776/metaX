@@ -74,6 +74,7 @@ cor.network=function(para,group,valueID="value",cor.method="spearman",
 ##' @param degree.thr Threshold of degree of node
 ##' @param size.factor Node size factor for plot 
 ##' @param layout layout for plotting
+##' @param showPlot Whether or not to print the figure to screen
 ##' @param ... Additional parameter
 ##' @return An object of igraph
 ##' @author Bo Wen \email{wenbo@@genomics.cn}
@@ -88,7 +89,7 @@ cor.network=function(para,group,valueID="value",cor.method="spearman",
 ##' para <- missingValueImpute(para)
 ##' gg <- plotNetwork(para,group=c("S","C"),degree.thr = 10,cor.thr = 0.8)
 plotNetwork=function(para,group,valueID="value",cor.thr=0.95,degree.thr=10,
-                     size.factor=0.5,layout=layout_in_circle,...){
+                     size.factor=0.5,layout=layout_in_circle,showPlot=FALSE,...){
     peaksData <- para@peaksData
     peaksData <- dplyr::filter(peaksData,class %in% group)
     xyData <- dcast(peaksData,sample+class~ID,value.var = valueID)
@@ -109,6 +110,9 @@ plotNetwork=function(para,group,valueID="value",cor.thr=0.95,degree.thr=10,
     plot(gg,layout=layout,vertex.label.cex=0.6,...)
     dev.off()
     message(resfig)
+    if(showPlot){
+        plot(gg,layout=layout,vertex.label.cex=0.6,...)
+    }
     return(gg)
     
 }

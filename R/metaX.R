@@ -245,6 +245,7 @@ setMethod("initialize", "metaXpara", function(.Object, ...) {
 ##' default is TRUE
 ##' @slot method The method used in PLS-DA. See \code{\link{plsr}} 
 ##' in \pkg{pls}
+##' @slot cpu The number of cpus used, default is all cpus.
 ##' @return A object of plsDAPara
 setClass("plsDAPara", slots=c(
     scale = "character",
@@ -255,7 +256,8 @@ setClass("plsDAPara", slots=c(
     nperm = "numeric",
     kfold = "numeric",
     do = "logical",
-    method = "character"),
+    method = "character",
+    cpu = "numeric"),
     prototype = prototype(scale = "uv",
                           center = TRUE,
                           t = 1, #1=log,2=cubic
@@ -264,6 +266,7 @@ setClass("plsDAPara", slots=c(
                           nperm = 200,
                           kfold = 7,
                           do = TRUE,
+                          cpu = 0,
                           method = "oscorespls")
 )
 
@@ -822,7 +825,7 @@ setMethod("makeMetaboAnalystInput", signature(para = "metaXpara"),
 ##' @param plsdaPara A \code{plsDAPara} object
 ##' @param doROC A logical indicates whether to calculate the ROC
 ##' @param saveRds Boolean, setting the argument to TRUE to save some objects to
-##' disk for debug. Only useful for developer. Default is FALSE.
+##' disk for debug. Only useful for developer. Default is TRUE.
 ##' @param ... Additional parameter
 ##' @return none
 ##' @author Bo Wen \email{wenbo@@genomics.cn}
@@ -842,10 +845,10 @@ setMethod("makeMetaboAnalystInput", signature(para = "metaXpara"),
 ##' plsdaPara <- new("plsDAPara")
 ##' res <- peakStat(para,plsdaPara)
 ##' }
-setGeneric("peakStat",function(para,plsdaPara,doROC=TRUE,saveRds=FALSE,...) standardGeneric("peakStat"))
+setGeneric("peakStat",function(para,plsdaPara,doROC=TRUE,saveRds=TRUE,...) standardGeneric("peakStat"))
 ##' @describeIn peakStat
 setMethod("peakStat", signature(para = "metaXpara",plsdaPara = "plsDAPara"), 
-          function(para,plsdaPara,doROC=TRUE,saveRds=FALSE,...){
+          function(para,plsdaPara,doROC=TRUE,saveRds=TRUE,...){
               
               ratioPairs <- para@ratioPairs #A:B;A:C;B:C
               ratioPairs <- unlist(strsplit(x = ratioPairs, split = ";"))
@@ -875,8 +878,8 @@ setMethod("peakStat", signature(para = "metaXpara",plsdaPara = "plsDAPara"),
                                                       case = cgroup[1],
                                                       control = cgroup[2]),
                                     #t.test_p.value = t.test(value~class)$p.value,
-                                    t.test_p.value = .tTest(value,class),
-                                    wilcox.test_p.value = wilcox.test(value~class)$p.value)
+                                    t.test_p.value = .tTest(valueNorm,class),
+                                    wilcox.test_p.value = wilcox.test(valueNorm~class)$p.value)
                   
                   ## Adjust P-values for Multiple Comparisons
                   statTest$t.test_p.value_BHcorrect <- p.adjust(p=statTest$t.test_p.value,
@@ -986,8 +989,24 @@ setMethod("peakStat", signature(para = "metaXpara",plsdaPara = "plsDAPara"),
                       names(peaksVIP)[1] <- "VIP"
                       peaksVIP$ID <- row.names(peaksVIP)
                       statTest <- plyr::join(statTest,peaksVIP,by = "ID")
+                      
                   }
                   statTest$sample <- rp     
+                  
+                  ## PCA analysis
+                  message(date(),"\tPCA analysis")
+                  ppca <- para
+                  ## only retain the classes we want to do the pca analysis
+                  ppca@peaksData <- ppca@peaksData %>% filter(class %in% cgroup)
+                  ppca <- transformation(ppca,method = plsdaPara@t,valueID = "valueNorm")
+                  ppca <- metaX::preProcess(ppca,scale = plsdaPara@scale,center = TRUE,
+                                            valueID = "valueNorm")
+                  
+                  ppca@prefix <- paste(cgroup,collapse = "_")
+                  ppca@prefix <- paste(para@prefix,"-",ppca@prefix,sep="")
+                  fig <- metaX::plotPCA(ppca,valueID = "valueNorm",scale = "none",batch = TRUE,
+                                        rmQC = FALSE)
+                  
                   
                   ## The venn plot of significant metabolites defined by different methods
                   venn.fig <- paste(para@outdir,"/",para@prefix,"-",rp,
@@ -1054,6 +1073,7 @@ setMethod("peakStat", signature(para = "metaXpara",plsdaPara = "plsDAPara"),
 ##' @rdname plotQCRLSC
 ##' @docType methods
 ##' @param para A \code{metaXpara} object
+##' @param maxf The number of features to plot
 ##' @return none
 ##' @author Bo Wen \email{wenbo@@genomics.cn}
 ##' @seealso \code{\link{doQCRLSC}}
@@ -1068,9 +1088,9 @@ setMethod("peakStat", signature(para = "metaXpara",plsdaPara = "plsDAPara"),
 ##' para <- missingValueImpute(para)
 ##' res <- doQCRLSC(para,cpu=1)
 ##' plotQCRLSC(res$metaXpara)
-setGeneric("plotQCRLSC",function(para) standardGeneric("plotQCRLSC"))
+setGeneric("plotQCRLSC",function(para,maxf=100) standardGeneric("plotQCRLSC"))
 ##' @describeIn plotQCRLSC
-setMethod("plotQCRLSC", signature(para = "metaXpara"), function(para){
+setMethod("plotQCRLSC", signature(para = "metaXpara"), function(para,maxf=100){
     x <- para@peaksData
     fig <- paste(para@outdir,"/",para@prefix,"-QC-RLSC.png",sep="")
     highfig <- sub(pattern = "png$",replacement = "pdf",x = fig)
@@ -1080,7 +1100,7 @@ setMethod("plotQCRLSC", signature(para = "metaXpara"), function(para){
     fid <- unique(x$ID)
     
     #for(i in 1:length(fid)){
-    maxn <- ifelse(length(fid)>=100,100,length(fid))
+    maxn <- ifelse(length(fid)>=maxf,maxf,length(fid))
     for(i in 1:maxn){
         dat <- x[x$ID==fid[i],]
         
@@ -1096,6 +1116,7 @@ setMethod("plotQCRLSC", signature(para = "metaXpara"), function(para){
                                    shape=batch,
                                    colour=class))+
             geom_point()+
+            scale_shape_manual(values=1:n_distinct(y$batch))+
             geom_line(data=y[y$class=="QC",],
                       aes(x=order,y=Intensity))+
             facet_grid(Method~.)+
@@ -1133,7 +1154,7 @@ setMethod("plotQCRLSC", signature(para = "metaXpara"), function(para){
 ##' @param rmQC A logical indicates whether remove QC data
 ##' @param batch A logical indicates whether output batch information
 ##' @param saveRds Boolean, setting the argument to TRUE to save some objects to
-##' disk for debug. Only useful for developer. Default is FALSE.
+##' disk for debug. Only useful for developer. Default is TRUE.
 ##' @param ... Additional parameter
 ##' @return none
 ##' @author Bo Wen \email{wenbo@@genomics.cn}
@@ -1150,13 +1171,13 @@ setMethod("plotQCRLSC", signature(para = "metaXpara"), function(para){
 ##' metaX::plotPCA(para,valueID="value",scale="uv",center=TRUE)
 setGeneric("plotPCA",function(para,pcaMethod="svdImpute",valueID="valueNorm",
                               label="order",rmQC=TRUE,batch=FALSE,
-                              scale="none",center=FALSE,saveRds=FALSE,...) 
+                              scale="none",center=FALSE,saveRds=TRUE,...) 
     standardGeneric("plotPCA"))
 ##' @describeIn plotPCA
 setMethod("plotPCA", signature(para = "metaXpara"), 
           function(para,pcaMethod="svdImpute",valueID="valueNorm",
                    label="order",rmQC=TRUE,batch=FALSE,
-                   scale="none",center=FALSE,saveRds=FALSE,...){
+                   scale="none",center=FALSE,saveRds=TRUE,...){
               
               message("plot PCA for value '",valueID,"'")
               
@@ -1180,15 +1201,19 @@ setMethod("plotPCA", signature(para = "metaXpara"),
               
               
               x<-dcast(x,ID~sample,value.var = valueID)
+              row.names(x) <- x$ID
               x$ID <- NULL
               
               pca.res <- pca(t(x), nPcs = 3, method=pcaMethod,cv="q2",
                              scale=scale,center=center,seed=123,...)
-              
+              row.names(pca.res@loadings) <- row.names(x)
               if(saveRds){
                 saveRDS(object = pca.res,file = paste(para@outdir,"/",
                                                       para@prefix,"-pca.rds",sep=""))
               }
+              
+              plotLoading(pca.res,fig=paste(para@outdir,"/",para@prefix,"-pcaloading.png",sep=""))
+              
               plotData <- data.frame(x=pca.res@scores[,1],
                                      y=pca.res@scores[,2],
                                      z=pca.res@scores[,3],
@@ -1197,10 +1222,13 @@ setMethod("plotPCA", signature(para = "metaXpara"),
               plotData$class <- as.character(plotData$class)
               plotData$class[is.na(plotData$class)] <- "QC" 
               
+              if(batch==TRUE){
+                  plotData$batch <- as.character(plotData$batch)
+              }
               
               ggobj <-ggplot(data = plotData,aes(x=x,y=y,colour=class))+
-                  geom_hline(aes(x=0),colour="white",size=1)+
-                  geom_vline(aes(x=0),colour="white",size=1)+
+                  geom_hline(yintercept=0,colour="white",size=1)+
+                  geom_vline(xintercept=0,colour="white",size=1)+
                   #geom_point()+
                   xlab(paste("PC1"," (",sprintf("%.2f%%",100*pca.res@R2[1]),") ",sep=""))+
                   ylab(paste("PC2"," (",sprintf("%.2f%%",100*pca.res@R2[2]),") ",sep=""))+
@@ -1222,8 +1250,8 @@ setMethod("plotPCA", signature(para = "metaXpara"),
                   ggobj <- ggobj + geom_text(aes(label=sample),size=4,hjust=-0.2)
               }
               if(batch==TRUE){
-                  ggobj <- ggobj + geom_point(aes(shape=as.character(batch)))+
-                      scale_shape_discrete(name  ="batch")
+                  ggobj <- ggobj + geom_point(aes(shape=batch))+
+                      scale_shape_manual(values=1:n_distinct(plotData$batch))
               }else{
                   ggobj <- ggobj + geom_point()
               }
@@ -1261,7 +1289,7 @@ setMethod("plotPCA", signature(para = "metaXpara"),
               png(filename = fig,width = 6,height = 6,units = "in",res = 150)
               print(ggobj)
               dev.off()
-              res <- list(fig=fig,highfig=highfig)
+              res <- list(fig=fig,highfig=highfig,pca=pca.res)
               return(res)
               
           }
@@ -1347,8 +1375,8 @@ setMethod("plotPLSDA", signature(para = "metaXpara"),
               sampleList$class <- NULL
               plotData <- merge(plotData,sampleList,by="sample",sort=FALSE)
               ggobj <-ggplot(data = plotData,aes(x=x,y=y,colour=class))+
-                  geom_hline(aes(x=0),colour="white",size=1)+
-                  geom_vline(aes(x=0),colour="white",size=1)+
+                  geom_hline(yintercept=0,colour="white",size=1)+
+                  geom_vline(xintercept=0,colour="white",size=1)+
                   geom_point()+
                   xlab(paste("PC1"," (",sprintf("%.2f%%",100*p$R2[1,1]),") ",sep=""))+
                   ylab(paste("PC2"," (",sprintf("%.2f%%",100*p$R2[2,1]),") ",sep=""))+
@@ -1378,7 +1406,7 @@ setMethod("plotPLSDA", signature(para = "metaXpara"),
                                        col.grid="lightblue",lty.hplot=2,pch="",color="gray",
                                        xlab = paste("PC1"," (",sprintf("%.2f%%",100*p$R2[1,1]),") ",sep=""),
                                        ylab = paste("PC2"," (",sprintf("%.2f%%",100*p$R2[2,1]),") ",sep=""),
-                                       zlab = paste("PC3"," (",sprintf("%.2f%%",100*p$R2[3,1]),") ",sep=""),
+                                       zlab = paste("PC3"," (",sprintf("%.2f%%",100*p$R2[3,1]),") ",sep="")
                   )#color = as.numeric(as.factor(plotData$class)))
                   s3d$points(plotData$x,plotData$y,plotData$z, pch = 1,col = col)
                   s3d.coords <- s3d$xyz.convert(plotData$x,plotData$y,plotData$z)
@@ -1684,12 +1712,12 @@ setMethod("doQCRLSC", signature(para = "metaXpara"),
               pdf(para@fig$cv,width = 6,height = 6)
               p<-ggplot(data=cvStatForEachBatch,aes(x=value,fill=CV,colour=CV))+
                   facet_grid(batch~.)+
-                  geom_density(binwidth=0.02,alpha = 0.5)+
+                  geom_density(alpha = 0.5)+
                   xlab(label = "CV")
               print(p)
               p<-ggplot(data=cvStatForEachBatch,aes(x=value,fill=CV,colour=CV))+
                   facet_grid(batch~.)+
-                  geom_density(binwidth=0.02,alpha = 0.5)+
+                  geom_density(alpha = 0.5)+
                   xlim(0,2)+
                   xlab(label = "CV")
               print(p)
@@ -2035,6 +2063,7 @@ setMethod("plotIntDistr", signature(x = "metaXpara"), function(x,width=14,...){
     
     dat$value <- log2(dat$value)
     
+    #save(dat,file="dat.rda")
     
     dat$order <- factor(dat$order,levels = sort(unique(dat$order)))
     dat$batch <- as.character(dat$batch)
@@ -2175,11 +2204,13 @@ setMethod("plotPeakNumber", signature(x = "metaXpara"), function(x,...){
     ggobj1 <- ggplot(data=dat,aes(x=order,y=npeaks,colour=class,shape=batch))+
         geom_point()+
         geom_text(aes(label=ifelse(outlier,order,"")),hjust=-0.2,size=4)+
+        scale_shape_manual(values=1:n_distinct(dat$batch))+
         ylab("Peaks number")
     print(ggobj1)
     ggobj2 <- ggplot(data=dat,aes(x=order,y=missPeaksN,colour=class,shape=batch))+
         geom_point()+
         geom_text(aes(label=ifelse(outlier,order,"")),hjust=-0.2,size=4)+
+        scale_shape_manual(values=1:n_distinct(dat$batch))+
         ylab("Missing peaks number")
     print(ggobj2)
     dev.off()
@@ -2192,6 +2223,14 @@ setMethod("plotPeakNumber", signature(x = "metaXpara"), function(x,...){
     message("Save the peaks number information to file: ",peaksNumberFile)
     write.table(x = dat,file = peaksNumberFile,quote=FALSE,sep="\t",
                 row.names=FALSE,col.names = TRUE)
+    
+    pTable <- dat %>% group_by(class) %>% 
+        dplyr::summarise(n00=quantile(npeaks)[1],
+                  n25=quantile(npeaks)[2],
+                  n50=quantile(npeaks)[3],
+                  n75=quantile(npeaks)[4],
+                  n100=quantile(npeaks)[5])
+    print(pTable)
     
     res <- list(fig=fig,highfig=highfig)
     return(res)
@@ -2511,7 +2550,7 @@ setMethod("plotQC", signature(para = "metaXpara"),
 ##' @param height The height of the graphics region in inches. 
 ##' The default values are 8.
 ##' @param saveRds Boolean, setting the argument to TRUE to save some objects to
-##' disk for debug. Only useful for developer. Default is FALSE.
+##' disk for debug. Only useful for developer. Default is TRUE.
 ##' @param ... Additional parameter
 ##' @author Bo Wen \email{wenbo@@genomics.cn}
 ##' @exportMethod
@@ -2533,13 +2572,13 @@ setMethod("plotQC", signature(para = "metaXpara"),
 ##' plotHeatMap(para,valueID="value",width=6)
 setGeneric("plotHeatMap",function(para,valueID="valueNorm",log=TRUE,rmQC=TRUE,
                                   zero2na=FALSE,colors="none",
-                                  width=12,height=8,saveRds=FALSE,...) 
+                                  width=12,height=8,saveRds=TRUE,...) 
     standardGeneric("plotHeatMap"))
 ##' @describeIn plotHeatMap
 setMethod("plotHeatMap", signature(para = "metaXpara"), 
           function(para,valueID="valueNorm",log=TRUE,rmQC=TRUE,
                    zero2na=FALSE,colors="none",width=12,height=8,
-                   saveRds=FALSE,...){
+                   saveRds=TRUE,...){
               
               message("plot heatmap for ",valueID)
               
@@ -3963,3 +4002,316 @@ setReplaceMethod("method", signature(para = "plsDAPara"),
                      para
                  }
 )
+
+
+
+importDataFromQI=function(para,file,mode=1,fw=NULL,rt=NULL){
+    
+    if(!dir.exists(para@outdir)){
+        dir.create(para@outdir,recursive = TRUE)
+    }
+    message("Read file:",file)
+    a <- read.csv(file,skip=2,check.names = FALSE)
+    firstRow = read.csv(file,nrows = 1,header = FALSE)
+    rawDataRow = which(firstRow=="Raw abundance")
+    norDataRow = which(firstRow=="Normalised abundance")
+    if(mode==1){
+        ## return nor data
+        a <- a[,1:(rawDataRow-1)]
+    }else{
+        ## return raw data
+        a <- a[,-c(norDataRow:c(rawDataRow-1))]
+    }
+    a$name <- a$Compound
+    a$rt   <- a$`Retention time (min)`
+    a$mz   <- a$`m/z`
+    a$mass <- a$`Neutral mass (Da)`
+
+    
+    ## Chromatographic peak width (min)
+    a$fw <- 60*a$`Chromatographic peak width (min)`
+    
+    ## summary
+    message("Peaks number:",nrow(a))
+    message("Samples number:",rawDataRow-norDataRow)
+    
+    ## precursor charge information
+    message("Charge information:")
+    print(table(a$Charge,useNA="always"))
+    
+    ## retention time 
+    message("Retention time:")
+    message(min(a$rt)," ",max(a$rt))
+    rt.fig <- paste(para@outdir,"/",para@prefix,"-rt.png",sep="")
+    png(filename = rt.fig,width = 8,height = 6,units = "in",res = 200)
+    gg <- ggplot(data=a,aes(x=rt))+geom_density(fill="blue",alpha=0.4)
+    print(gg)
+    dev.off()
+    
+    ## mz 
+    message("M/Z:")
+    message(min(a$mz)," ",max(a$mz))
+    mz.fig <- paste(para@outdir,"/",para@prefix,"-mz.png",sep="")
+    png(filename = mz.fig,width = 8,height = 6,units = "in",res = 200)
+    gg <- ggplot(data=a,aes(x=mz))+geom_density(fill="blue",alpha=0.4)
+    print(gg)
+    dev.off()
+    
+    ## mass
+    message("mass:")
+    ## sometimes, the masses all are NA
+    if(any(!is.na(a$mass))){
+        message(min(a$mass,na.rm = TRUE)," ",max(a$mass,na.rm = TRUE))
+        mass.fig <- paste(para@outdir,"/",para@prefix,"-mass.png",sep="")
+        png(filename = mass.fig,width = 8,height = 6,units = "in",res = 200)
+        gg <- ggplot(data=a,aes(x=mass))+geom_density(fill="blue",alpha=0.4)
+        print(gg)
+        dev.off()
+    }
+    
+    ## mz versus rt
+    rtmz.fig <- paste(para@outdir,"/",para@prefix,"-rt_mz.png",sep="")
+    png(filename = rtmz.fig,width = 8,height = 6,units = "in",res = 200)
+    gg <- ggplot(data=a,aes(x=rt,y=mz))+geom_point()+geom_density2d()
+    print(gg)
+    dev.off()
+
+    message("Chromatographic peak width (s):")
+    message(min(a$fw)," ",max(a$fw))
+    fw.fig <- paste(para@outdir,"/",para@prefix,"-fw.png",sep="")
+    png(filename = fw.fig,width = 8,height = 6,units = "in",res = 200)
+    gg <- ggplot(data=a,aes(x=fw))+geom_density(fill="blue",alpha=0.4)
+    print(gg)
+    dev.off()
+    
+    message("Chromatographic peak width (s) VS retention time:")
+    fwrt.fig <- paste(para@outdir,"/",para@prefix,"-fwrt.png",sep="")
+    png(filename = fw.fig,width = 8,height = 6,units = "in",res = 200)
+    gg <- ggplot(data=a,aes(x=rt,y=fw))+geom_point()+geom_density2d()
+    #+
+    #    scale_y_continuous(trans = log2_trans(),
+    #                       breaks = trans_breaks("log2", function(x) 2^x),
+    #                       labels = trans_format("log2", math_format(2^.x)))
+    print(gg)
+    dev.off()
+    
+    if(!is.null(rt)){
+        if(length(rt)!=2){
+            stop("Please provide valid rt, such as c(0.5,14)!")
+        }
+        
+        message("\n\nfilter rt(min): ",rt[1],", ",rt[2])
+        prt <- rt
+        n_1 <- nrow(a)
+        a <- a %>% filter(rt >= prt[1],rt <= prt[2])
+        n_2 <- nrow(a)
+        message("remove peaks:",n_1-n_2)
+        ## precursor charge information
+        message("Charge information:")
+        print(table(a$Charge,useNA="always"))
+        
+        ## retention time 
+        message("Retention time:")
+        message(min(a$rt)," ",max(a$rt))
+        message("Peak width:")
+        message(min(a$fw)," ",max(a$fw))
+    }
+    
+    if(!is.null(fw)){
+        if(length(fw)!=2){
+            stop("Please provide valid fw, such as c(5,30)!")
+        }
+        
+        message("\n\nfilter peak with (s): ",fw[1],", ",fw[2])
+        pfw <- fw
+        n_1 <- nrow(a)
+        a <- a %>% filter(fw >= pfw[1],fw <= pfw[2])
+        n_2 <- nrow(a)
+        message("remove peaks:",n_1-n_2)
+        ## precursor charge information
+        message("Charge information:")
+        print(table(a$Charge,useNA="always"))
+        
+        ## retention time 
+        message("Retention time:")
+        message(min(a$rt)," ",max(a$rt))
+        rt.fig <- paste(para@outdir,"/",para@prefix,"-rt_filter.png",sep="")
+        png(filename = rt.fig,width = 8,height = 6,units = "in",res = 200)
+        gg <- ggplot(data=a,aes(x=rt))+geom_density(fill="blue",alpha=0.4)
+        print(gg)
+        dev.off()
+        
+        ## mz 
+        message("M/Z:")
+        message(min(a$mz)," ",max(a$mz))
+        mz.fig <- paste(para@outdir,"/",para@prefix,"-mz_filter.png",sep="")
+        png(filename = mz.fig,width = 8,height = 6,units = "in",res = 200)
+        gg <- ggplot(data=a,aes(x=mz))+geom_density(fill="blue",alpha=0.4)
+        print(gg)
+        dev.off()
+        
+        ## mass
+        message("mass:")
+        ## sometimes, the masses all are NA
+        if(any(!is.na(a$mass))){
+            message(min(a$mass,na.rm = TRUE)," ",max(a$mass,na.rm = TRUE))
+            mass.fig <- paste(para@outdir,"/",para@prefix,"-mass_filter.png",sep="")
+            png(filename = mass.fig,width = 8,height = 6,units = "in",res = 200)
+            gg <- ggplot(data=a,aes(x=mass))+geom_density(fill="blue",alpha=0.4)
+            print(gg)
+            dev.off()
+        }
+        
+        ## mz versus rt
+        rtmz.fig <- paste(para@outdir,"/",para@prefix,"-rt_mz_filter.png",sep="")
+        png(filename = rtmz.fig,width = 8,height = 6,units = "in",res = 200)
+        gg <- ggplot(data=a,aes(x=rt,y=mz))+geom_point()+geom_density2d()
+        print(gg)
+        dev.off()
+        
+        message("Chromatographic peak width (s):")
+        message(min(a$fw)," ",max(a$fw))
+        fw.fig <- paste(para@outdir,"/",para@prefix,"-fw_filter.png",sep="")
+        png(filename = fw.fig,width = 8,height = 6,units = "in",res = 200)
+        gg <- ggplot(data=a,aes(x=fw))+geom_density(fill="blue",alpha=0.4)
+        print(gg)
+        dev.off()
+        
+        message("Chromatographic peak width (s) VS retention time:")
+        fwrt.fig <- paste(para@outdir,"/",para@prefix,"-fwrt_filter.png",sep="")
+        png(filename = fw.fig,width = 8,height = 6,units = "in",res = 200)
+        gg <- ggplot(data=a,aes(x=rt,y=fw))+geom_point()+geom_density2d()
+        #+
+        #    scale_y_continuous(trans = log2_trans(),
+        #                       breaks = trans_breaks("log2", function(x) 2^x),
+        #                       labels = trans_format("log2", math_format(2^.x)))
+        print(gg)
+        dev.off()
+    }
+        
+    para@rawPeaks <- a
+    return(para)
+}
+
+
+
+importDataFromXCMS=function(para,file){
+    
+    if(!dir.exists(para@outdir)){
+        dir.create(para@outdir,recursive = TRUE)
+    }
+    message("Read file:",file)
+    if(str_detect(file,".csv")){
+        a <- read.csv(file,check.names = FALSE,stringsAsFactors = FALSE)
+    }else{
+        a <- read.table(file,header = TRUE,sep="\t",check.names = FALSE,stringsAsFactors = FALSE)
+    }
+    para@rawPeaks <- a
+    return(para)
+}
+
+
+importDataFromMetaboAnalyst=function(para,file){
+    
+    if(!dir.exists(para@outdir)){
+        dir.create(para@outdir,recursive = TRUE)
+    }
+    message("Read file:",file)
+    
+    sample_name <- as.character(read.csv(file,nrows = 1,check.names = FALSE,header = FALSE,stringsAsFactors = FALSE,row.names = 1))
+    sample_group <- as.character(read.csv(file,nrows = 1,check.names = FALSE,skip = 1,header = FALSE,stringsAsFactors = FALSE,row.names = 1))
+    if(any(str_detect(string = sample_name,pattern = "_"))){
+        sample_order <- str_split(sample_name,pattern = "_",n = 2)
+        sample_order <- as.integer(sapply(sample_order, function(x){x[2]}))
+    }else{
+        sample_order <- 1:length(sample_name)
+    }
+    sample_infor <- data.frame(sample=sample_name,class=sample_group,order=sample_order,batch=rep(1,length(sample_name)))
+    para@sampleListFile <- paste(para@outdir,"/sample_infor.txt",sep="")
+    write.table(x = sample_infor,file = para@sampleListFile, sep="\t",row.names = FALSE,col.names = TRUE,quote=FALSE)
+    para@rawPeaks <- read.csv(file,check.names = FALSE,header = FALSE,stringsAsFactors = FALSE,skip = 2)
+    names(para@rawPeaks) <- c("name",sample_name)
+    return(para)
+}
+
+
+##' @title Plot figures for PCA/PLS-DA loadings
+##' @description Plot figure for PCA/PLS-DA loadings
+##' @rdname plotLoading
+##' @docType methods
+##' @param object object of pcaRes or PLS-DA
+##' @param out.tol control the points to show labels
+##' @param label 0=>only show part of the labels, 1=>show all the labels, 3=none labels
+##' @return none
+##' @author Bo Wen \email{wenbo@@genomics.cn}
+##' @seealso \code{\link{plotPCA}}
+##' @exportMethod
+##' @examples
+##' para <- new("metaXpara")
+##' pfile <- system.file("extdata/MTBLS79.txt",package = "metaX")
+##' sfile <- system.file("extdata/MTBLS79_sampleList.txt",package = "metaX")
+##' rawPeaks(para) <- read.delim(pfile,check.names = FALSE)
+##' sampleListFile(para) <- sfile
+##' para <- reSetPeaksData(para)
+##' para <- missingValueImpute(para)
+##' para <- transformation(para,valueID = "value")
+##' res <- metaX::plotPCA(para,valueID="value",scale="uv",center=TRUE)
+##' plotLoading(res$pca,fig="loading.png")
+setGeneric("plotLoading",function(object,out.tol=0.9,label=0,fig="loading.png") standardGeneric("plotLoading"))
+
+##' @describeIn plotLoading
+setMethod("plotLoading", signature(object = "pcaRes"), function(object,out.tol=0.9,label=0,fig="loading.png"){
+    loadings_data <- as.data.frame(object@loadings)
+    plotLoading(loadings_data,out.tol=out.tol,label=label,fig=fig)
+})
+
+##' @describeIn plotLoading
+setMethod("plotLoading", signature(object = "mvr"), function(object,out.tol=0.9,label=0,fig="loading.png"){
+    if(ncol(object$loadings)>=2){
+        loadings_data <- as.data.frame(object$loadings[,1:2])
+        names(loadings_data) <- c("PC1","PC2")
+        plotLoading(loadings_data,out.tol=out.tol,label=label,fig=fig)
+    }else{
+        message("The number of components of PLS-DA are less than 2!")
+    }
+})
+
+##' @describeIn plotLoading
+setMethod("plotLoading", signature(object = "data.frame"), function(object,out.tol=0.9,label=0,fig="loading.png"){
+    loadings_data <- as.matrix(object)
+    HotEllipse<-abs(cbind(metaX:::HotE(loadings_data[,1],loadings_data[,2])))*out.tol
+    outliers<-as.numeric()
+    for (i in 1:nrow(loadings_data)){
+
+        sample<-abs(loadings_data[i,])
+        out.PC1<-which(HotEllipse[,1]<sample[1])
+        out.PC1.PC2<-any(HotEllipse[out.PC1,2]<sample[2])*1
+
+        outlier<-ifelse(out.PC1.PC2>0,1,0)#+out.PC1.PC3+out.PC2.PC3>0,1,0)
+        outliers<-c(outliers,outlier)
+    }
+
+    dat <- as.data.frame(loadings_data)
+    dat$label <- row.names(dat)
+    dat$label[outliers==0] <- ""
+    dat$col <- as.character(outliers)
+    dat$alllabel <- row.names(dat)
+
+    png(fig,width = 600,height = 600,res=120)
+    gg <- ggplot(data=dat,aes(x=PC1,y=PC2,colour=col))+
+        geom_hline(yintercept=0,linetype=2)+
+        geom_vline(xintercept=0,linetype=2)+
+        geom_point(alpha=0.5)+
+        theme_bw()+
+        theme(legend.position="none")
+    if(label==0){
+        gg <- gg + geom_text(aes(label=label),size=2.5,vjust=0,hjust=0)
+    }else if(label==1){
+        gg <- gg + geom_text(aes(label=alllabel),size=2.5,vjust=0,hjust=0)
+    }else{
+        ## no label
+    }
+    print(gg)
+    dev.off()
+        
+})
