@@ -1,7 +1,7 @@
 Package: metaX
 Type: Package
 Title: An R package for metabolomic data analysis
-Version: 1.3.4
+Version: 1.3.5
 Date: 2015-02-10
 Author: Bo Wen <wenbo@genomics.cn>
 Maintainer: Bo Wen <wenbo@genomics.cn>
@@ -49,6 +49,8 @@ Imports:
     tidyr,
     scales
 License: LGPL-2
+URL: http://wenbostar.github.io/metaX/
+BugReports: https://github.com/wenbostar/metaX/issues
 Suggests:
     knitr,
     BiocStyle,

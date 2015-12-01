@@ -4004,7 +4004,18 @@ setReplaceMethod("method", signature(para = "plsDAPara"),
 )
 
 
-
+##' @title importDataFromQI
+##' @description Import peak data from Progenesis QI.
+##' @param para an object of metaXpara
+##' @param file a csv file exported from Progenesis QI, which contains peak 
+##' intensity data
+##' @param mode 1, read the normalized data; 2, read the raw data
+##' @param fw valid peak width range, for example, it can be set as c(1,30).
+##' The unit is second.
+##' @param rt valid retention time range, for example, it can be set as c(0.5,9).
+##' The unit is minute
+##' @return an object of metaXpara
+##' @export
 importDataFromQI=function(para,file,mode=1,fw=NULL,rt=NULL){
     
     if(!dir.exists(para@outdir)){
@@ -4194,7 +4205,13 @@ importDataFromQI=function(para,file,mode=1,fw=NULL,rt=NULL){
 }
 
 
-
+##' @title importDataFromXCMS
+##' @description Import peak data from XCMS
+##' @param para an object of metaXpara
+##' @param file a csv or txt format file exported from XCMS, which contains peak 
+##' intensity data
+##' @return an object of metaXpara
+##' @export
 importDataFromXCMS=function(para,file){
     
     if(!dir.exists(para@outdir)){
@@ -4211,6 +4228,13 @@ importDataFromXCMS=function(para,file){
 }
 
 
+##' @title importDataFromMetaboAnalyst
+##' @description Import peak data from MetaboAnalyst
+##' @param para an object of metaXpara
+##' @param file a csv file exported from MetaboAnalyst, which contains peak 
+##' intensity data
+##' @return an object of metaXpara
+##' @export
 importDataFromMetaboAnalyst=function(para,file){
     
     if(!dir.exists(para@outdir)){

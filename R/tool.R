@@ -945,7 +945,14 @@ setMethod("dataClean", signature(para = "metaXpara"),
 
 
 
-
+##' @title checkQCPlot
+##' @description Plot figure for quantification and identification result
+##' @param f1 a file contained the quantification result of metaX
+##' @param f2 a file contained the metabolite identification result
+##' @param fig the file name of output figure
+##' @param group the group name
+##' @return none
+##' @export
 checkQCPlot=function(f1,f2=NULL,fig="test.png",group=NULL){
     
     
@@ -1026,6 +1033,13 @@ checkQCPlot=function(f1,f2=NULL,fig="test.png",group=NULL){
 }
 
 
+##' @title checkPvaluePlot
+##' @description Plot pvalue distribution
+##' @param f1 a file contained the quantification result of metaX
+##' @param fig the file name of output figure
+##' @param group the group name
+##' @return none
+##' @export
 checkPvaluePlot=function(file=NULL,group=NULL,fig="pvalue.png"){
     a <- read.delim(file,stringsAsFactors = FALSE)
     a <- a %>% filter(sample==group)
@@ -1044,6 +1058,7 @@ checkPvaluePlot=function(file=NULL,group=NULL,fig="pvalue.png"){
     dev.off()
     
 }
+
 
 checkSampleList=function(file=NULL){
     a <- read.delim(file,stringsAsFactors = FALSE)

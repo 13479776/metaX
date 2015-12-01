@@ -210,16 +210,16 @@ The function metaXpipe automates the whole data analysis process. In general, th
 \item PCA (score plot, loading plot)
 \item PLS-DA (score plot, loading plot, permutation test, Q2, R2)
 \item Assessment of data quality:
-	\begin{enumerate}
-	\item The peak number distribution
-	\item The number of missing value distribution
-	\item The boxplot of peak intensity
-	\item The total peak intensity distribution
-	\item The correlation heatmap of QC samples if available
-	\item Metabolite m/z (or mass) distribution
-	\item Plot of m/z versus retention time
-	\item PCA score or loading plot of all samples
-	\end{enumerate}
+    \begin{enumerate}
+    \item The peak number distribution
+    \item The number of missing value distribution
+    \item The boxplot of peak intensity
+    \item The total peak intensity distribution
+    \item The correlation heatmap of QC samples if available
+    \item Metabolite m/z (or mass) distribution
+    \item Plot of m/z versus retention time
+    \item PCA score or loading plot of all samples
+    \end{enumerate}
 
 \end{enumerate}
 
@@ -752,7 +752,7 @@ The example figures can be viewed in website \href{http://wenbostar.github.io/me
 
 
 \subsection{How to select the best number of components for PLS-DA?}
-The function \Rfunction{selectBestComponent} can be used to select the best number of components for PLS-DA. This function calculates the R$^$2 and Q$^$2 for each component. 
+The function \Rfunction{selectBestComponent} can be used to select the best number of components for PLS-DA. This function calculates the R2 and Q2 for each component. 
 <<eval=FALSE>>=
 para <- new("metaXpara")
 pfile <- system.file("extdata/MTBLS79.txt",package = "metaX")
