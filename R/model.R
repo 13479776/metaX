@@ -200,8 +200,8 @@ runPLSDA=function(para,plsdaPara,auc=TRUE,sample=NULL,valueID="valueNorm",
     sampleList$class <- NULL
     plotData <- merge(plotData,sampleList,by="sample",sort=FALSE)
     ggobj <-ggplot(data = plotData,aes(x=x,y=y,colour=class))+
-        geom_hline(aes(x=0),colour="white",size=1)+
-        geom_vline(aes(x=0),colour="white",size=1)+
+        geom_hline(yintercept=0,colour="white",size=1)+
+        geom_vline(yintercept=0,colour="white",size=1)+
         geom_point()+
 
         xlab(paste("PC1"," (",sprintf("%.2f%%",explvar(result$model)[1]),") ",
