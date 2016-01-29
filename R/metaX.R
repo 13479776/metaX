@@ -926,8 +926,7 @@ setMethod("peakStat", signature(para = "metaXpara",plsdaPara = "plsDAPara"),
                   
                   ## histogram of log2(ratio)
                   ggobj <- ggplot(data=plotdata,aes(x=log2(x)))+
-                      geom_histogram(aes(y = ..density..),colour="white",fill="#56B4E9",
-                                     binwidth=0.1)+
+                      geom_histogram(aes(y = ..density..),colour="white",fill="#56B4E9")+
                       geom_density(colour="#E69F00")+
                       xlab("Log2(Fold change)")+
                       stat_function(fun=dnorm, colour="blue",
@@ -1199,8 +1198,8 @@ setMethod("plotPCA", signature(para = "metaXpara"),
               
               
               ggobj <-ggplot(data = plotData,aes(x=x,y=y,colour=class))+
-                  geom_hline(aes(x=0),colour="white",size=1)+
-                  geom_vline(aes(x=0),colour="white",size=1)+
+                  geom_hline(yintercept=0,colour="white",size=1)+
+                  geom_vline(xintercept=0,colour="white",size=1)+
                   #geom_point()+
                   xlab(paste("PC1"," (",sprintf("%.2f%%",100*pca.res@R2[1]),") ",sep=""))+
                   ylab(paste("PC2"," (",sprintf("%.2f%%",100*pca.res@R2[2]),") ",sep=""))+
@@ -1347,8 +1346,8 @@ setMethod("plotPLSDA", signature(para = "metaXpara"),
               sampleList$class <- NULL
               plotData <- merge(plotData,sampleList,by="sample",sort=FALSE)
               ggobj <-ggplot(data = plotData,aes(x=x,y=y,colour=class))+
-                  geom_hline(aes(x=0),colour="white",size=1)+
-                  geom_vline(aes(x=0),colour="white",size=1)+
+                  geom_hline(yintercept=0,colour="white",size=1)+
+                  geom_vline(xintercept=0,colour="white",size=1)+
                   geom_point()+
                   xlab(paste("PC1"," (",sprintf("%.2f%%",100*p$R2[1,1]),") ",sep=""))+
                   ylab(paste("PC2"," (",sprintf("%.2f%%",100*p$R2[2,1]),") ",sep=""))+
@@ -1684,12 +1683,12 @@ setMethod("doQCRLSC", signature(para = "metaXpara"),
               pdf(para@fig$cv,width = 6,height = 6)
               p<-ggplot(data=cvStatForEachBatch,aes(x=value,fill=CV,colour=CV))+
                   facet_grid(batch~.)+
-                  geom_density(binwidth=0.02,alpha = 0.5)+
+                  geom_density(alpha = 0.5)+
                   xlab(label = "CV")
               print(p)
               p<-ggplot(data=cvStatForEachBatch,aes(x=value,fill=CV,colour=CV))+
                   facet_grid(batch~.)+
-                  geom_density(binwidth=0.02,alpha = 0.5)+
+                  geom_density(alpha = 0.5)+
                   xlim(0,2)+
                   xlab(label = "CV")
               print(p)
